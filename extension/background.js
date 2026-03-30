@@ -1,11 +1,19 @@
-// background.js — Briefly v2.1.1 (100% OpenRouter)
+// background.js — Briefly v2.1.1 (OpenRouter + Gemini)
 import { Prompts } from './prompts.js';
 
 const COMPILER_URL = 'http://localhost:3000/compile';
 
 // ─── Default model IDs ────────────────────────────────────────────────────────
-const DEFAULT_TEXT_MODEL  = 'anthropic/claude-3.5-sonnet';
-const DEFAULT_LATEX_MODEL = 'anthropic/claude-3.5-sonnet';
+const DEFAULT_MODELS = {
+  openrouter: {
+    text:  'anthropic/claude-3.5-sonnet',
+    latex: 'anthropic/claude-3.5-sonnet',
+  },
+  gemini: {
+    text:  'gemini-2.5-flash',
+    latex: 'gemini-2.5-flash',
+  },
+};
 
 // ─── Side Panel ────────────────────────────────────────────────────────────────
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
@@ -41,21 +49,47 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
  *   - If BOTH slots are empty → use the hardcoded default for the task type.
  *
  * @param {'text'|'latex'} taskType
- * @param {{ textModel?: string, latexModel?: string }} settings
+ * @param {{ provider?: string, geminiKey?: string, openRouterKey?: string, textModel?: string, latexModel?: string }} settings
  */
 function resolveModel(taskType, settings) {
+  const defaults = getProviderDefaults(resolveProvider(settings));
   const text  = (settings.textModel  || '').trim();
   const latex = (settings.latexModel || '').trim();
 
   if (taskType === 'text') {
     if (text)  return text;
     if (latex) return latex;          // fallback: use latex model for text tasks
-    return DEFAULT_TEXT_MODEL;
+    return defaults.text;
   }
   // taskType === 'latex'
   if (latex) return latex;
   if (text)  return text;             // fallback: use text model for latex tasks
-  return DEFAULT_LATEX_MODEL;
+  return defaults.latex;
+}
+
+function resolveProvider(settings = {}) {
+  const provider = String(settings.provider || '').trim().toLowerCase();
+  if (provider === 'gemini' || provider === 'openrouter') return provider;
+  if ((settings.geminiKey || '').trim() && !(settings.openRouterKey || '').trim()) return 'gemini';
+  return 'openrouter';
+}
+
+function getProviderDefaults(provider) {
+  return DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter;
+}
+
+function getProviderApiKey(settings) {
+  const provider = resolveProvider(settings);
+  return provider === 'gemini'
+    ? (settings.geminiKey || '').trim()
+    : (settings.openRouterKey || '').trim();
+}
+
+function ensureProviderApiKey(settings) {
+  const provider = resolveProvider(settings);
+  const apiKey   = getProviderApiKey(settings);
+  if (!apiKey) throw new Error(`Missing ${provider === 'gemini' ? 'Gemini' : 'OpenRouter'} API key in Settings.`);
+  return apiKey;
 }
 
 // ─── JD ───────────────────────────────────────────────────────────────────────
@@ -105,10 +139,13 @@ async function handleClearJD(sendResponse) {
 async function handleExtractJDMeta(msg, sendResponse) {
   try {
     const settings = await getSettings();
-    const model    = resolveModel('text', settings);
     const prompt   = Prompts.extractJDMeta(msg.jd, msg.profile);
-
-    const raw      = await callOpenRouter(settings.openRouterKey, prompt.system, prompt.user, [], model);
+    const raw      = await callAI(settings, {
+      systemPrompt: prompt.system,
+      userPrompt:   prompt.user,
+      taskType:     'text',
+      structured:   true,
+    });
 
     // JSON safety net — strip any markdown fences OpenRouter may wrap around output
     const cleanJson = raw.replace(/```json\n?|```/g, '').trim();
@@ -131,10 +168,13 @@ async function handleExtractJDMeta(msg, sendResponse) {
 async function handleParseResume(msg, sendResponse) {
   try {
     const settings = await getSettings();
-    const model    = resolveModel('text', settings);
     const prompt   = Prompts.parseResume(msg.text);
-
-    const raw       = await callOpenRouter(settings.openRouterKey, prompt.system, prompt.user, [], model);
+    const raw       = await callAI(settings, {
+      systemPrompt: prompt.system,
+      userPrompt:   prompt.user,
+      taskType:     'text',
+      structured:   true,
+    });
 
     // JSON safety net — strip any markdown fences
     const cleanJson = raw.replace(/```json\n?|```/g, '').trim();
@@ -150,9 +190,17 @@ async function handleParseResume(msg, sendResponse) {
 async function handleGenerateResume(msg, sendResponse) {
   try {
     const settings = await getSettings();
-    const model    = resolveModel('latex', settings);
-    const prompt   = Prompts.generateResume(msg.profile, msg.jd, msg.latexTemplate || settings.resumeTemplate || '');
-    const latex    = await callOpenRouter(settings.openRouterKey, prompt.system, prompt.user, [], model);
+    const prompt   = Prompts.generateResume(
+      msg.profile,
+      msg.jd,
+      msg.latexTemplate || settings.resumeTemplate || '',
+      msg.personalization || settings.personalizationNotes || ''
+    );
+    const latex    = await callAI(settings, {
+      systemPrompt: prompt.system,
+      userPrompt:   prompt.user,
+      taskType:     'latex',
+    });
     sendResponse({ success: true, latex });
   } catch (e) {
     sendResponse({ success: false, error: e.message });
@@ -162,9 +210,17 @@ async function handleGenerateResume(msg, sendResponse) {
 async function handleGenerateCover(msg, sendResponse) {
   try {
     const settings = await getSettings();
-    const model    = resolveModel('latex', settings);
-    const prompt   = Prompts.generateCoverLetter(msg.profile, msg.jd, msg.latexTemplate || settings.coverTemplate || '');
-    const latex    = await callOpenRouter(settings.openRouterKey, prompt.system, prompt.user, [], model);
+    const prompt   = Prompts.generateCoverLetter(
+      msg.profile,
+      msg.jd,
+      msg.latexTemplate || settings.coverTemplate || '',
+      msg.personalization || settings.personalizationNotes || ''
+    );
+    const latex    = await callAI(settings, {
+      systemPrompt: prompt.system,
+      userPrompt:   prompt.user,
+      taskType:     'latex',
+    });
     sendResponse({ success: true, latex });
   } catch (e) {
     sendResponse({ success: false, error: e.message });
@@ -175,10 +231,14 @@ async function handleGenerateCover(msg, sendResponse) {
 async function handleChat(msg, sendResponse) {
   try {
     const settings = await getSettings();
-    const model    = resolveModel('text', settings);
     const { question, jd, profile, detailedMode, history } = msg;
     const prompt   = Prompts.chat(profile, jd, detailedMode);
-    const answer   = await callOpenRouter(settings.openRouterKey, prompt.system, question, history || [], model);
+    const answer   = await callAI(settings, {
+      systemPrompt: prompt.system,
+      userPrompt:   question,
+      history:      history || [],
+      taskType:     'text',
+    });
     sendResponse({ success: true, answer });
   } catch (e) {
     sendResponse({ success: false, error: e.message });
@@ -252,16 +312,19 @@ async function handleClearAllStorage(sendResponse) {
   sendResponse({ success: true });
 }
 
-// ─── Unified OpenRouter API Call ───────────────────────────────────────────────
-/**
- * Single function for all AI calls. Routes every task through OpenRouter.
- *
- * @param {string}   apiKey       - OpenRouter API key
- * @param {string}   systemPrompt
- * @param {string}   userPrompt
- * @param {Array}    history      - [{role, content}] previous chat turns (pass [] for non-chat)
- * @param {string}   modelId      - Fully-qualified OpenRouter model string
- */
+// ─── AI Providers ──────────────────────────────────────────────────────────────
+async function callAI(settings, { systemPrompt, userPrompt, history = [], taskType = 'text', structured = false }) {
+  const provider = resolveProvider(settings);
+  const apiKey   = ensureProviderApiKey(settings);
+  const modelId  = resolveModel(taskType, settings);
+
+  if (provider === 'gemini') {
+    return callGemini(apiKey, systemPrompt, userPrompt, history, modelId, { structured });
+  }
+
+  return callOpenRouter(apiKey, systemPrompt, userPrompt, history, modelId);
+}
+
 async function callOpenRouter(apiKey, systemPrompt, userPrompt, history = [], modelId) {
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -290,6 +353,62 @@ async function callOpenRouter(apiKey, systemPrompt, userPrompt, history = [], mo
   }
   const data = await res.json();
   return data.choices[0].message.content;
+}
+
+async function callGemini(apiKey, systemPrompt, userPrompt, history = [], modelId, { structured = false } = {}) {
+  const contents = [
+    ...history.map(h => ({
+      role:  h.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: h.content }],
+    })),
+    { role: 'user', parts: [{ text: userPrompt }] },
+  ];
+
+  const generationConfig = {
+    temperature:     structured ? 0.15 : 0.3,
+    maxOutputTokens: 4096,
+    responseMimeType: structured ? 'application/json' : 'text/plain',
+  };
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${normalizeGeminiModel(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini ${res.status}: ${err}`);
+  }
+
+  const data = await res.json();
+  const text = extractGeminiText(data);
+  if (!text) {
+    const blockReason = data?.promptFeedback?.blockReason;
+    if (blockReason) throw new Error(`Gemini blocked the response: ${blockReason}`);
+    throw new Error('Gemini returned no text content.');
+  }
+  return text;
+}
+
+function extractGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  return parts
+    .map(part => typeof part?.text === 'string' ? part.text : '')
+    .join('')
+    .trim();
+}
+
+function normalizeGeminiModel(modelId) {
+  const model = String(modelId || '').trim();
+  return model.startsWith('models/') ? model.slice('models/'.length) : model;
 }
 
 // ─── Utility ───────────────────────────────────────────────────────────────────

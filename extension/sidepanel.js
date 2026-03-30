@@ -2,8 +2,16 @@
 // sidepanel.js — Briefly v2.1.1
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const DEFAULT_TEXT_MODEL  = 'anthropic/claude-3.5-sonnet';
-const DEFAULT_LATEX_MODEL = 'anthropic/claude-3.5-sonnet';
+const DEFAULT_MODELS = {
+  openrouter: {
+    text:  'anthropic/claude-3.5-sonnet',
+    latex: 'anthropic/claude-3.5-sonnet',
+  },
+  gemini: {
+    text:  'gemini-2.5-flash',
+    latex: 'gemini-2.5-flash',
+  },
+};
 
 // ─── Profile Schema ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
@@ -109,6 +117,33 @@ async function loadStorage() {
   if (data.jd)       state.jd       = data.jd;
 }
 
+function resolveProviderFromSettings(settings = {}) {
+  const provider = String(settings.provider || '').trim().toLowerCase();
+  if (provider === 'gemini' || provider === 'openrouter') return provider;
+  if ((settings.geminiKey || '').trim() && !(settings.openRouterKey || '').trim()) return 'gemini';
+  return 'openrouter';
+}
+
+function getProviderLabel(provider) {
+  return provider === 'gemini' ? 'Gemini' : 'OpenRouter';
+}
+
+function getProviderDefaults(provider) {
+  return DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter;
+}
+
+function getSelectedProviderKey(settings = state.settings) {
+  const provider = resolveProviderFromSettings(settings);
+  return provider === 'gemini'
+    ? (settings.geminiKey || '').trim()
+    : (settings.openRouterKey || '').trim();
+}
+
+function getMissingProviderMessage() {
+  const provider = resolveProviderFromSettings(state.settings);
+  return `Add a ${getProviderLabel(provider)} API key in Settings.`;
+}
+
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 function bindTabNav() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -170,8 +205,8 @@ async function handleRescan() {
     state.jd = scrapeRes.jd;
     refreshJDStatus();
 
-    if (!state.settings.openRouterKey) {
-      showToast('Add an OpenRouter API key in Settings to enable JD analysis.', 'error');
+    if (!getSelectedProviderKey()) {
+      showToast(`${getMissingProviderMessage()} Enable JD analysis after saving it.`, 'error');
       return;
     }
 
@@ -432,7 +467,7 @@ function bindProfileTab() {
 
   parseBtn.addEventListener('click', async () => {
     if (!state.parsedResumeText) return showFeedback(fb, 'File still loading, try again.', 'error');
-    if (!state.settings.openRouterKey) return showFeedback(fb, 'Add an OpenRouter API key in Settings.', 'error');
+    if (!getSelectedProviderKey()) return showFeedback(fb, getMissingProviderMessage(), 'error');
     setBtnLoading(parseBtn, true, '⏳ Parsing…');
     try {
       const res = await sendMsg({ type: 'PARSE_RESUME', text: state.parsedResumeText });
@@ -713,6 +748,7 @@ function bindSettingsTab() {
   });
 
   // Live model resolution preview — updates as the user types
+  el('s-provider').addEventListener('change', updateProviderUI);
   el('s-text-model').addEventListener('input', updateModelPreview);
   el('s-latex-model').addEventListener('input', updateModelPreview);
 
@@ -734,29 +770,53 @@ function bindTemplateUpload(inputId, nameId, previewId, loadedId, storageKey) {
  * Mirror of resolveModel() from background.js, kept in sync.
  * Used purely for the live Settings preview — does NOT make API calls.
  */
-function resolveModelPreview(taskType, textModel, latexModel) {
+function resolveModelPreview(provider, taskType, textModel, latexModel) {
+  const defaults = getProviderDefaults(provider);
   const text  = textModel.trim();
   const latex = latexModel.trim();
   if (taskType === 'text') {
     if (text)  return text;
     if (latex) return latex;
-    return DEFAULT_TEXT_MODEL;
+    return defaults.text;
   }
   if (latex) return latex;
   if (text)  return text;
-  return DEFAULT_LATEX_MODEL;
+  return defaults.latex;
+}
+
+function updateProviderUI() {
+  const provider = el('s-provider').value || 'openrouter';
+  const defaults = getProviderDefaults(provider);
+  const providerLabel = getProviderLabel(provider);
+
+  el('provider-key-hint').textContent = provider === 'gemini'
+    ? 'Gemini requests use your Gemini API key and Gemini model ids like gemini-2.5-flash.'
+    : 'OpenRouter requests use your OpenRouter key and OpenRouter model ids like anthropic/claude-3.5-sonnet.';
+  el('model-config-hint').textContent = provider === 'gemini'
+    ? 'Gemini will use Gemini model ids. You can use one model for everything or split text and LaTeX tasks. If only one field is filled, it is used for both automatically.'
+    : 'OpenRouter will use OpenRouter model ids. You can use one model for everything or split text and LaTeX tasks. If only one field is filled, it is used for both automatically.';
+
+  el('s-text-model').placeholder = defaults.text;
+  el('s-latex-model').placeholder = defaults.latex;
+  el('resolved-provider').textContent = providerLabel;
+
+  updateModelPreview();
 }
 
 function updateModelPreview() {
+  const provider   = el('s-provider').value || 'openrouter';
   const textModel  = el('s-text-model').value;
   const latexModel = el('s-latex-model').value;
-  el('resolved-text-model').textContent  = resolveModelPreview('text',  textModel, latexModel);
-  el('resolved-latex-model').textContent = resolveModelPreview('latex', textModel, latexModel);
+  el('resolved-provider').textContent    = getProviderLabel(provider);
+  el('resolved-text-model').textContent  = resolveModelPreview(provider, 'text',  textModel, latexModel);
+  el('resolved-latex-model').textContent = resolveModelPreview(provider, 'latex', textModel, latexModel);
 }
 
 function populateSettingsForm() {
   const s = state.settings;
+  setVal('s-provider',   resolveProviderFromSettings(s));
   setVal('s-or-key',     s.openRouterKey);
+  setVal('s-gemini-key', s.geminiKey);
   setVal('s-text-model', s.textModel);
   setVal('s-latex-model',s.latexModel);
   setVal('s-sheets',     s.sheetsUrl);
@@ -764,14 +824,15 @@ function populateSettingsForm() {
   if (s.resumeTemplate) { el('resume-tpl-loaded').textContent = '✓ resume.tex (cached)'; el('resume-tpl-preview').classList.remove('hidden'); }
   if (s.coverTemplate)  { el('cover-tpl-loaded').textContent  = '✓ cover.tex (cached)';  el('cover-tpl-preview').classList.remove('hidden'); }
 
-  // Render initial resolution preview
-  updateModelPreview();
+  updateProviderUI();
 }
 
 async function saveSettings() {
   state.settings = {
     ...state.settings,         // preserve cached templates
+    provider:      el('s-provider').value,
     openRouterKey: el('s-or-key').value.trim(),
+    geminiKey:     el('s-gemini-key').value.trim(),
     textModel:     el('s-text-model').value.trim(),
     latexModel:    el('s-latex-model').value.trim(),
     sheetsUrl:     el('s-sheets').value.trim(),
@@ -847,9 +908,11 @@ function setBtnLoading(btn, loading, label) {
 }
 
 function showToast(msg, type = 'error') {
-  const bg = type === 'success' ? '#3dd68c' : '#f06060';
+  const theme = type === 'success'
+    ? { bg: '#f1fff6', border: '#c9efd9', color: '#2f8d64' }
+    : { bg: '#fff0f3', border: '#f5c9d1', color: '#cf5266' };
   const t  = document.createElement('div');
-  t.style.cssText = `position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:${bg};color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;z-index:9999;max-width:88%;text-align:center;box-shadow:0 4px 16px #0006;`;
+  t.style.cssText = `position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:${theme.bg};border:1px solid ${theme.border};color:${theme.color};padding:12px 16px;border-radius:18px;font-size:12px;font-weight:700;z-index:9999;max-width:88%;text-align:center;box-shadow:0 18px 36px rgba(59,47,34,.12);backdrop-filter:blur(10px);`;
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 4000);

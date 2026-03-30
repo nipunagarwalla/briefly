@@ -1,0 +1,15 @@
+{
+  "name": "briefly",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup-profile": "node cli/briefly.mjs setup"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "pdfjs-dist": "^5.4.296"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

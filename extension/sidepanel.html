@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Briefly</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="sidepanel.css" />
 </head>
 <body>
@@ -13,9 +13,18 @@
 
   <!-- ══ HEADER ══ -->
   <header class="app-header">
-    <div class="logo">
-      <span class="logo-mark">⬡</span>
-      <span class="logo-text">Briefly<em>AI</em></span>
+    <div class="brand-row">
+      <div class="logo">
+        <span class="logo-mark" aria-hidden="true">
+          <span></span>
+          <span></span>
+        </span>
+        <div class="logo-copy">
+          <span class="logo-text">Briefly</span>
+          <span class="logo-subtext">Job application copilot</span>
+        </div>
+      </div>
+      <span class="brand-chip">AI</span>
     </div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="application">Apply</button>
@@ -30,8 +39,42 @@
   ══════════════════════════════════════════════════════════ -->
   <section id="tab-application" class="tab-content active">
 
+    <!-- Quick Tailor -->
+    <div class="panel panel-tint panel-blue quick-flow-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Tailor Resume For This Job</h2>
+          <p class="hint-text quick-flow-hint">
+            Briefly will scan the current posting, find the strongest matches, and rewrite your resume toward callback odds.
+          </p>
+        </div>
+        <span class="badge">Fast Flow</span>
+      </div>
+      <div class="workflow-status-grid">
+        <div class="workflow-status-card">
+          <span class="workflow-status-label">Resume Profile</span>
+          <span id="status-profile" class="workflow-status-value">Not ready</span>
+        </div>
+        <div class="workflow-status-card">
+          <span class="workflow-status-label">Job Description</span>
+          <span id="status-jd-ready" class="workflow-status-value">Not scanned</span>
+        </div>
+        <div class="workflow-status-card">
+          <span class="workflow-status-label">Personalization</span>
+          <span id="status-personalization" class="workflow-status-value">Optional</span>
+        </div>
+      </div>
+      <div class="quick-flow-actions">
+        <button id="btn-tailor-resume" class="btn btn-primary w-full">Tailor Resume For This Job</button>
+        <div class="row-gap">
+          <button id="btn-open-profile" class="btn btn-secondary btn-sm">Import Resume</button>
+          <button id="btn-open-settings" class="btn btn-ghost btn-sm">Settings</button>
+        </div>
+      </div>
+    </div>
+
     <!-- JD Scan -->
-    <div class="panel">
+    <div class="panel panel-surface panel-glow">
       <div class="panel-header">
         <h2>Job Description</h2>
         <div class="row-gap">
@@ -47,10 +90,10 @@
     </div>
 
     <!-- JD Analysis (populated after Re-scan) -->
-    <div id="jd-analysis" class="panel hidden">
+    <div id="jd-analysis" class="panel panel-tint panel-blue hidden">
       <div class="panel-header">
         <h2>JD Analysis</h2>
-        <span class="badge">OpenRouter</span>
+        <span class="badge">AI</span>
       </div>
       <div class="analysis-section">
         <div class="analysis-label"><span class="dot dot-green"></span>Exact Skill Matches</div>
@@ -67,10 +110,15 @@
     </div>
 
     <!-- Generate Documents -->
-    <div class="panel">
-      <div class="panel-header"><h2>Documents</h2></div>
+    <div class="panel panel-surface">
+      <div class="panel-header">
+        <div>
+          <h2>Tailored Documents</h2>
+          <p class="hint-text">Use the main button above for the simplest flow, or generate documents individually here.</p>
+        </div>
+      </div>
       <div class="btn-group">
-        <button id="btn-gen-resume" class="btn btn-primary">⬡ Resume</button>
+        <button id="btn-gen-resume" class="btn btn-primary">Tailor Resume</button>
         <button id="btn-gen-cover"  class="btn btn-secondary">✉ Cover Letter</button>
       </div>
       <div id="resume-output" class="output-block hidden">
@@ -96,9 +144,9 @@
     </div>
 
     <!-- Q&A Chat -->
-    <div class="panel chat-panel">
+    <div class="panel panel-surface chat-panel">
       <div class="panel-header">
-        <h2>Quick Q&amp;A <span class="badge">OpenRouter</span></h2>
+        <h2>Quick Q&amp;A <span class="badge">AI</span></h2>
         <label class="toggle-label">
           <input type="checkbox" id="detailed-toggle" />
           <span class="toggle-track"></span>
@@ -113,7 +161,7 @@
     </div>
 
     <!-- Track Application -->
-    <div class="panel">
+    <div class="panel panel-tint panel-green">
       <div class="panel-header"><h2>Track Application</h2></div>
       <div class="apply-form">
         <div class="row-gap">
@@ -140,10 +188,10 @@
   ══════════════════════════════════════════════════════════ -->
   <section id="tab-profile" class="tab-content">
 
-    <div class="panel">
+    <div class="panel panel-tint panel-blue">
       <div class="panel-header">
         <h2>Import from Resume</h2>
-        <span class="badge">OpenRouter</span>
+        <span class="badge">AI</span>
       </div>
       <p class="hint-text">Upload a PDF or TXT resume to auto-fill your profile.</p>
       <label class="file-upload-label">
@@ -157,7 +205,7 @@
 
     <div id="profile-modules" class="profile-modules"></div>
 
-    <div class="panel">
+    <div class="panel panel-surface panel-footer">
       <button id="btn-save-profile" class="btn btn-primary w-full">Save Profile</button>
     </div>
 
@@ -168,21 +216,35 @@
   ══════════════════════════════════════════════════════════ -->
   <section id="tab-settings" class="tab-content">
 
-    <!-- API Key -->
-    <div class="panel">
-      <h3 class="section-title">API Key</h3>
+    <!-- AI Provider -->
+    <div class="panel panel-surface">
+      <h3 class="section-title">AI Provider</h3>
+      <div class="form-group">
+        <label>Provider</label>
+        <select id="s-provider" class="input select">
+          <option value="openrouter">OpenRouter</option>
+          <option value="gemini">Gemini</option>
+        </select>
+      </div>
       <div class="form-group">
         <label>OpenRouter API Key</label>
         <input type="password" id="s-or-key" class="input" placeholder="sk-or-…" />
       </div>
+      <div class="form-group">
+        <label>Gemini API Key</label>
+        <input type="password" id="s-gemini-key" class="input" placeholder="AIza..." />
+      </div>
+      <p id="provider-key-hint" class="hint-text">
+        Only the selected provider key is used for AI requests.
+      </p>
     </div>
 
     <!-- Dual Model Config -->
-    <div class="panel">
+    <div class="panel panel-surface panel-glow">
       <h3 class="section-title">Model Configuration</h3>
-      <p class="hint-text settings-hint">
-        All AI tasks route through OpenRouter. You can use one model for everything
-        or specify separate models for text and LaTeX tasks.
+      <p id="model-config-hint" class="hint-text settings-hint">
+        You can use one model for everything or specify separate models for text
+        and LaTeX tasks.
         If only one field is filled, it is used for both task types automatically.
       </p>
 
@@ -222,6 +284,11 @@
       <div class="model-resolution-box" id="model-resolution-box">
         <div class="resolution-row">
           <span class="resolution-dot dot-blue"></span>
+          <span class="resolution-label">Provider:</span>
+          <code id="resolved-provider" class="resolution-value">OpenRouter</code>
+        </div>
+        <div class="resolution-row">
+          <span class="resolution-dot dot-blue"></span>
           <span class="resolution-label">Text tasks will use:</span>
           <code id="resolved-text-model" class="resolution-value">anthropic/claude-3.5-sonnet</code>
         </div>
@@ -234,16 +301,31 @@
     </div>
 
     <!-- Integrations -->
-    <div class="panel">
+    <div class="panel panel-tint panel-green-soft">
       <h3 class="section-title">Integrations</h3>
       <div class="form-group">
         <label>Google Script Web App URL</label>
         <input type="url" id="s-sheets" class="input" placeholder="https://script.google.com/…" />
       </div>
+      <div class="form-group">
+        <label>Personalization Notes <span class="label-hint">(optional .md or .txt)</span></label>
+        <label class="file-upload-label">
+          <input type="file" id="personalization-upload" accept=".md,.txt" />
+          <span class="file-upload-icon">⬆</span>
+          <span id="personalization-name">Upload personalization.md…</span>
+        </label>
+        <div id="personalization-preview" class="tpl-preview hidden">
+          <span id="personalization-loaded" class="tpl-loaded-name"></span>
+          <button class="btn-clear-tpl" data-tpl="personalizationNotes">✕</button>
+        </div>
+        <p class="hint-text">
+          Import the `personalization.md` generated by the CLI to help Briefly prioritize what your resume should emphasize.
+        </p>
+      </div>
     </div>
 
     <!-- LaTeX Templates -->
-    <div class="panel">
+    <div class="panel panel-surface">
       <h3 class="section-title">LaTeX Templates</h3>
       <div class="form-group">
         <label>Resume Template <span class="label-hint">(.tex)</span></label>
@@ -271,7 +353,7 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel panel-surface panel-footer">
       <button id="btn-save-settings" class="btn btn-primary w-full">Save Settings</button>
       <div id="settings-feedback" class="feedback hidden"></div>
     </div>
@@ -282,7 +364,7 @@
        TAB: STORAGE EXPLORER
   ══════════════════════════════════════════════════════════ -->
   <section id="tab-storage" class="tab-content">
-    <div class="panel">
+    <div class="panel panel-surface">
       <div class="panel-header">
         <h2>Storage Explorer</h2>
         <div class="row-gap">
